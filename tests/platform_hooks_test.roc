@@ -5,7 +5,7 @@ app [main!] {
 }
 
 import pf.Http
-import pf.OsStr exposing [OsStr]
+import pf.OsStr
 import pf.Random
 import pf.Utc
 import spec.Assert

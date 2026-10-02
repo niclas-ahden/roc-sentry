@@ -21,7 +21,7 @@
 ## Records break onto their own lines, one field each. A value without a
 ## record in it stays on one line, so `Timeout(Read(Socket))` is left as it
 ## is.
-import Inspected exposing [Inspected]
+import Inspected
 
 PrettyPrint := [].{
 

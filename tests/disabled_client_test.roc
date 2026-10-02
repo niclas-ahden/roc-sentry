@@ -5,7 +5,7 @@ app [main!] {
 	sentry: "../package/main.roc",
 }
 
-import pf.OsStr exposing [OsStr]
+import pf.OsStr
 import spec.Assert
 import sentry.Sentry
 import Support

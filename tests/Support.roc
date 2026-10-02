@@ -1,8 +1,8 @@
 ## What every test in this directory shares: a DSN, hooks that answer from a
 ## canned response or check the request they are given, and a decoder for the
 ## envelope a client posts. No test touches the network.
-import http.Request exposing [Request]
-import http.Response exposing [Response]
+import http.Request
+import http.Response
 import sentry.Sentry
 
 Support := [].{

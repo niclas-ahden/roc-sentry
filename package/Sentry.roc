@@ -42,14 +42,14 @@
 ## context there is.
 ## An [Event] adds a request, a user, tags, extra data and a fingerprint on
 ## top of that.
-import http.Request exposing [Request]
-import http.Response exposing [Response]
+import http.Request
+import http.Response
 import Cap
-import Dsn exposing [Dsn]
+import Dsn
 import Envelope
 import EventId
 import Filter
-import Inspected exposing [Inspected]
+import Inspected
 import PrettyPrint
 import RateLimit
 import Scrub

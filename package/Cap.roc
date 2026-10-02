@@ -10,7 +10,7 @@
 ## all but the first few kilobytes would be thrown away. The bytes cut there
 ## still count towards the size the note gives.
 import Ascii
-import Inspected exposing [Inspected]
+import Inspected
 
 Cap := [].{
 

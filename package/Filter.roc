@@ -3,7 +3,7 @@
 ## `Sentry.event` filters the tree it parses an error into here, so that the
 ## error is parsed only once.
 import Ascii
-import Inspected exposing [Inspected]
+import Inspected
 
 Filter := [].{
 
