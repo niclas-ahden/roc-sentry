@@ -41,23 +41,11 @@ Filter := [].{
 					Scalar(text(scalar))
 				}
 			Tag(name, payloads) => Tag(name, pair_items(payloads))
-			Record(fields) =>
-				match pair_name(fields) {
-					Ok(name) =>
-						Record(
-							fields.map(
-								|field|
-									if field.key == "name" or field.key == "key" {
-										{ key: field.key, value: Filter.tree(field.value) }
-									} else if field.key == "value" and names_secret(name) {
-										{ key: field.key, value: secret_value(name, field.value) }
-									} else {
-										by_name(field)
-									},
-							),
-						)
-					Err(NotAPair) => Record(fields.map(by_name))
-				}
+			# WORKAROUND: https://github.com/roc-lang/roc/issues/11972
+			# The fields go through top-level functions, not a closure that calls
+			# back into `tree`, which an optimized build spends far longer on in
+			# the range prover.
+			Record(fields) => Record(record_fields(fields))
 			Sequence({ open, close, items }) =>
 				if open == "(" {
 					Sequence({ open, close, items: pair_items(items) })
@@ -113,6 +101,36 @@ cookie_headers = ["cookie", "set-cookie", "set_cookie"]
 ## The attributes that end a `Set-Cookie` header and have no value.
 cookie_flags : List(Str)
 cookie_flags = ["secure", "httponly", "partitioned"]
+
+## The fields of a record, each filtered by its name. In a `{ name, value }`
+## or `{ key, value }` pair, see [pair_name], the value is filtered by the
+## name the pair gives it instead.
+record_fields : List({ key : Str, value : Inspected }) -> List({ key : Str, value : Inspected })
+record_fields = |fields|
+	match pair_name(fields) {
+		Ok(name) => pair_fields(name, fields, [])
+		Err(NotAPair) => fields.map(by_name)
+	}
+
+## The fields of a pair called `name`, see [record_fields], appended to `done`.
+pair_fields : Str, List({ key : Str, value : Inspected }), List({ key : Str, value : Inspected }) -> List({ key : Str, value : Inspected })
+pair_fields = |name, fields, done|
+	match fields {
+		[] => done
+		[field, .. as rest] => pair_fields(name, rest, done.append(pair_field(name, field)))
+	}
+
+## One field of a pair called `name`: the name itself filtered as a [Filter.tree],
+## the value filtered by the name, anything else by its own name.
+pair_field : Str, { key : Str, value : Inspected } -> { key : Str, value : Inspected }
+pair_field = |name, field|
+	if field.key == "name" or field.key == "key" {
+		{ key: field.key, value: Filter.tree(field.value) }
+	} else if field.key == "value" and names_secret(name) {
+		{ key: field.key, value: secret_value(name, field.value) }
+	} else {
+		by_name(field)
+	}
 
 ## A record field filtered by its name: all of its value when the name is
 ## sensitive, and what is secret inside the value otherwise.

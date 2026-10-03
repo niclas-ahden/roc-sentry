@@ -14,9 +14,12 @@ JsonText := [].{
 	## UTF-8 included, is copied as it is.
 	string : Str -> Str
 	string = |s| {
-		escaped = s.to_utf8().fold([quote], |acc, byte| escape(acc, byte))
-		# Only ASCII was added to valid UTF-8, so nothing is lost here.
-		Str.from_utf8_lossy(escaped.append(quote))
+		# WORKAROUND: https://github.com/roc-lang/roc/issues/11972
+		# A fold that appends each byte, escaped, makes an optimized build of
+		# the envelope run out of memory in the range prover, so the builtin
+		# `replace_each` does the escaping instead.
+		body = escapes.fold(s, |text, (raw, escaped)| text.replace_each(raw, escaped))
+		"\"${body}\""
 	}
 
 	## A JSON object from `fields`, each a key and its value as JSON text, in
@@ -32,35 +35,30 @@ JsonText := [].{
 	array = |items| "[${Str.join_with(items, ",")}]"
 }
 
-quote : U8
-quote = 34
+## What JSON escapes in a string, each with its escaped form. The backslash
+## comes first, so that the backslashes the others add stay single.
+escapes : List((Str, Str))
+escapes = [("\\", "\\\\"), ("\"", "\\\"")].concat(List.repeat({}, 32).map_with_index(|{}, index| control_escape(index.to_u8_wrap())))
 
-backslash : U8
-backslash = 92
-
-## `acc` with `byte` appended, escaped when JSON requires it.
-escape : List(U8), U8 -> List(U8)
-escape = |acc, byte|
-	if byte == quote {
-		acc.append(backslash).append(quote)
-	} else if byte == backslash {
-		acc.append(backslash).append(backslash)
-	} else if byte == 10 {
-		acc.append(backslash).append(110) # \n
-	} else if byte == 13 {
-		acc.append(backslash).append(114) # \r
-	} else if byte == 9 {
-		acc.append(backslash).append(116) # \t
-	} else if byte == 8 {
-		acc.append(backslash).append(98) # \b
-	} else if byte == 12 {
-		acc.append(backslash).append(102) # \f
-	} else if byte < 32 {
-		# \u00XX
-		acc.append(backslash).append(117).append(48).append(48).append(Hex.digit(byte // 16)).append(Hex.digit(byte % 16))
-	} else {
-		acc.append(byte)
-	}
+## A control character U+0000 to U+001F and how JSON writes it.
+control_escape : U8 -> (Str, Str)
+control_escape = |byte| {
+	escaped =
+		if byte == 10 {
+			"\\n"
+		} else if byte == 13 {
+			"\\r"
+		} else if byte == 9 {
+			"\\t"
+		} else if byte == 8 {
+			"\\b"
+		} else if byte == 12 {
+			"\\f"
+		} else {
+			Str.from_utf8_lossy([92, 117, 48, 48, Hex.digit(byte // 16), Hex.digit(byte % 16)])
+		}
+	(Str.from_utf8_lossy([byte]), escaped)
+}
 
 expect JsonText.string("plain") == "\"plain\""
 expect JsonText.string("") == "\"\""
