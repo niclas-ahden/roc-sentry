@@ -1,6 +1,6 @@
 app [main!] {
-	pf: platform "https://github.com/niclas-ahden/basic-cli/releases/download/0.27.0/HZanbveSUDoJF8LypR663eH7PpaKEKG36eErEQzmV1Qs.tar.zst",
 	http: "https://github.com/roc-lang/http/releases/download/2.0.0/6ZUwqYhCS8PU9Mo6MF7oV82ET2o7KYb57CLKDq4cq4sS.tar.zst",
+	pf: platform "https://github.com/niclas-ahden/basic-cli/releases/download/0.27.0/HZanbveSUDoJF8LypR663eH7PpaKEKG36eErEQzmV1Qs.tar.zst",
 	sentry: "../package/main.roc",
 }
 
@@ -25,7 +25,7 @@ main! = |_args| {
 	client =
 		match Env.var_str!("SENTRY_DSN") {
 			Ok(dsn) =>
-				# The hooks are the platform's HTTP client, clock and random numbers, as they are.
+			# The hooks are the platform's HTTP client, clock and random numbers, as they are.
 				Sentry.init(
 					{ http_send!: Http.send!, now!: Utc.now!, random_u64!: Random.seed_u64! },
 					dsn,

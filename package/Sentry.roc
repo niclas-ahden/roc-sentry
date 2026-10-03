@@ -762,7 +762,7 @@ expect {
 	ev = Sentry.event(Resp({ body: "x ".repeat(100_000) }))
 	ev.value.count_utf8_bytes() < 8_100
 		and ev.value.ends_with("… [truncated, was 200012 bytes]")
-		and ev.message.ends_with("… [truncated, was 200015 bytes]")
+			and ev.message.ends_with("… [truncated, was 200015 bytes]")
 }
 expect {
 	ev = Sentry.event(Body("a \"b\" ".repeat(200_000)))

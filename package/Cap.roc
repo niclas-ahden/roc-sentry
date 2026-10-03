@@ -220,7 +220,7 @@ expect {
 	{ kept, dropped } = Cap.text_before_filtering("word ".repeat(20_000))
 	kept.count_utf8_bytes() <= Cap.max_filtered_bytes
 		and kept.count_utf8_bytes() + dropped == 100_000
-		and kept.ends_with("word")
+			and kept.ends_with("word")
 }
 
 # A URL straddling the cut is dropped whole rather than cut in two
