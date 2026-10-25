@@ -15,8 +15,8 @@ Support := [].{
 	endpoint = "https://o1.ingest.sentry.io/api/123/envelope/"
 
 	## A fixed clock: 2025-01-01T00:00:00Z.
-	now : U128
-	now = 1_735_689_600_000_000_000
+	now : Sentry.EpochNanos
+	now = Sentry.epoch_nanos(1_735_689_600_000_000_000)
 
 	## A fixed random number, the same at every call.
 	random_u64 : U64
@@ -32,16 +32,16 @@ Support := [].{
 	accepted = Response.from_status(200).with_body(Str.to_utf8("{\"id\":\"${event_id}\"}"))
 
 	## Hooks whose `http_send!` answers every request with `response`.
-	answering : Response -> Sentry.Hooks([Unreachable], [Unreachable])
+	answering : Response -> Sentry.PlatformHooks([Unreachable], Sentry.EpochNanos, [Unreachable])
 	answering = |response| { http_send!: |_request| Ok(response), now!: || now, random_u64!: || Ok(random_u64) }
 
 	## Hooks whose `http_send!` fails with `err`.
-	failing : err -> Sentry.Hooks(err, [Unreachable])
+	failing : err -> Sentry.PlatformHooks(err, Sentry.EpochNanos, [Unreachable])
 	failing = |err| { http_send!: |_request| Err(err), now!: || now, random_u64!: || Ok(random_u64) }
 
 	## Hooks whose `http_send!` runs `check` on the request and fails with what
 	## it finds wrong, and otherwise answers as Sentry does when it accepts.
-	checking : (Request -> Try({}, err)) -> Sentry.Hooks(err, [Unreachable])
+	checking : (Request -> Try({}, err)) -> Sentry.PlatformHooks(err, Sentry.EpochNanos, [Unreachable])
 	checking = |check| {
 		http_send!: |request| {
 			check(request)?
@@ -52,7 +52,7 @@ Support := [].{
 	}
 
 	## A client for [dsn] with the test environment and release.
-	client : Sentry.Hooks(http_err, random_err) -> Try(Sentry.Client, _)
+	client : Sentry.PlatformHooks(http_err, Sentry.EpochNanos, random_err) -> Try(Sentry.Client, _)
 	client = |hooks| Sentry.init(hooks, dsn, { environment: "test", release: "roc-sentry-test@0.1.0" })
 
 	## The three lines of the envelope in `request`'s body.

@@ -25,9 +25,12 @@ main! = |_args| {
 	client =
 		match Env.var_str!("SENTRY_DSN") {
 			Ok(dsn) =>
-			# The hooks are the platform's HTTP client, clock and random numbers, as they are.
+			# The hooks are the platform's HTTP client, clock and random numbers.
+			# WORKAROUND: a lambda rather than `Http.send!` itself, because a
+			# package passing a bare `{}` as its `SendOptions` crashes Roc
+			# 54283d4. Pass `Http.send!` once roc-lang/roc#12606 is fixed.
 				Sentry.init(
-					{ http_send!: Http.send!, now!: Utc.now!, random_u64!: Random.seed_u64! },
+					{ http_send!: |request| Http.send!(request, {}), now!: Utc.now!, random_u64!: Random.seed_u64! },
 					dsn,
 					{ environment: "example", release: "roc-sentry-example@0.1.0" },
 				)?

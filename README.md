@@ -7,7 +7,7 @@ an error, and secrets are filtered out before anything is sent.
 
 ```roc
 app [main!] {
-    pf: platform "https://github.com/niclas-ahden/basic-cli/releases/download/0.28.0/AP9SGT1yrhCKcFxKcoA5tBkNCM6ibBjBxcQGMTb6krev.tar.zst",
+    pf: platform "https://github.com/niclas-ahden/basic-cli/releases/download/0.30.0/6XAUy48Jp34GANurMrMf74DtF7NdpkhnqFLHE4gHNzJy.tar.zst",
     sentry: "https://github.com/niclas-ahden/roc-sentry/releases/download/0.1.1/Bj9dNfvg8dq6gGHqD4aBrAWLLpZLHpXmMFfDGhd1fJGp.tar.zst",
 }
 
@@ -20,7 +20,14 @@ import sentry.Sentry
 
 main! = |_args| {
     client = Sentry.init(
-        { http_send!: Http.send!, now!: Utc.now!, random_u64!: Random.seed_u64! },
+        {
+            # WORKAROUND: a lambda rather than `Http.send!` itself, because a
+            # package passing a bare `{}` as its `SendOptions` crashes Roc
+            # 54283d4. Pass `Http.send!` once roc-lang/roc#12606 is fixed.
+            http_send!: |request| Http.send!(request, {}),
+            now!: Utc.now!,
+            random_u64!: Random.seed_u64!,
+        },
         Env.var_str!("SENTRY_DSN") ?? "",
         { environment: "production", release: "shop@1.4.2" },
     )?
@@ -124,12 +131,20 @@ asks for no more events. Skip sending until then, as Sentry's own SDKs do.
   `server_name` and `timeout_ms` (default `5_000`). Write the record inline
   in `Sentry.init`. Bound to a name, it needs the annotation
   `options : Sentry.Options`.
-- **Other platforms:** any platform works whose HTTP client takes a
-  [roc-lang/http](https://github.com/roc-lang/http) `Request`. `now!`
-  returns nanoseconds since the Unix epoch and `random_u64!` a random `U64`.
-  With [basic-webserver](https://github.com/niclas-ahden/basic-webserver):
+- **Platform hooks:** `Sentry.init` takes the platform's own functions in
+  a `Sentry.PlatformHooks` record. `http_send!` posts a
+  [roc-lang/http](https://github.com/roc-lang/http) `Request`, `now!`
+  returns any time with a `to_nanos_since_epoch`, such as basic-cli's `Utc`,
+  and `random_u64!` a random `U64`. Other platforms work too. On
+  [basic-webserver](https://github.com/niclas-ahden/basic-webserver),
+  `Http.send!` fits as it is, and its clock is a `Timestamp` read with
+  `nanos_since_epoch`, so `Sentry.epoch_nanos` turns it into a time:
   ```roc
-  { http_send!: Http.send!, now!: || UnixTime.now!().nanos_since_epoch().to_u128_wrap(), random_u64!: Random.seed_u64! }
+  {
+      http_send!: Http.send!,
+      now!: || Sentry.epoch_nanos(UnixTime.now!().nanos_since_epoch()),
+      random_u64!: Random.seed_u64!,
+  }
   ```
 - **Malformed DSN:** `Sentry.init` fails with `InvalidDsn(problem)`. To run
   without reporting instead, log it and use `Sentry.disabled`, a client that

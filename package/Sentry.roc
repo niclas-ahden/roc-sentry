@@ -9,7 +9,9 @@
 ##
 ## main! = |_args| {
 ##     client = Sentry.init(
-##         { http_send!: Http.send!, now!: Utc.now!, random_u64!: Random.seed_u64! },
+##         # WORKAROUND: a lambda for `Http.send!` until roc-lang/roc#12606 is
+##         # fixed, see [PlatformHooks].
+##         { http_send!: |request| Http.send!(request, {}), now!: Utc.now!, random_u64!: Random.seed_u64! },
 ##         "https://key@o1.ingest.sentry.io/123",
 ##         { environment: "production", release: "shop@1.4.2" },
 ##     )?
@@ -37,9 +39,9 @@
 ## Sentry's limits.
 ##
 ## Roc has no runtime stack traces and a package cannot do I/O of its own, so
-## two things come from the application: [Hooks] wire in the platform's HTTP
-## client, clock and random numbers, and the error value carries whatever
-## context there is.
+## two things come from the application: [PlatformHooks] wire in the
+## platform's HTTP client, clock and random numbers, and the error value
+## carries whatever context there is.
 ## An [Event] adds a request, a user, tags, extra data and a fingerprint on
 ## top of that.
 import http.Request
@@ -62,26 +64,54 @@ Sentry := [].{
 	version : Str
 	version = "0.1.1"
 
-	## The platform's effects, wired in at [init]. Roc has no parameterized
-	## modules, so they arrive as plain function values. With
+	## The platform's functions, wired in at [init]. Roc has no parameterized
+	## modules, so they arrive as plain function values, taken as the
+	## platform has them. With
 	## [basic-cli](https://github.com/niclas-ahden/basic-cli):
 	##
 	## ```
-	## { http_send!: Http.send!, now!: Utc.now!, random_u64!: Random.seed_u64! }
+	## {
+	##     # WORKAROUND: a lambda rather than `Http.send!` itself, because a
+	##     # package passing a bare `{}` as its `SendOptions` crashes Roc
+	##     # 54283d4. Pass `Http.send!` once roc-lang/roc#12606 is fixed.
+	##     http_send!: |request| Http.send!(request, {}),
+	##     now!: Utc.now!,
+	##     random_u64!: Random.seed_u64!,
+	## }
 	## ```
 	##
 	## `http_send!` posts a [roc-lang/http](https://github.com/roc-lang/http)
 	## `Request` and returns its `Response`, or the platform's own error
-	## `http_err`. `now!` is the time in nanoseconds since the Unix epoch,
-	## which stamps events. `random_u64!` is a random number from the
-	## operating system, or the platform's error `random_err`. Two of them
-	## make each event's id, which Sentry needs to be unique, since it drops
-	## an event whose id it has seen before.
-	Hooks(http_err, random_err) := {
+	## `http_err`. `now!` is the current time, which stamps events. It can be
+	## any `time` with a `to_nanos_since_epoch`, such as basic-cli's `Utc`, or
+	## an [EpochNanos] on a platform without one. `random_u64!` is a random
+	## number from the operating system, or the platform's error
+	## `random_err`. Two of them make each event's id, which Sentry needs to
+	## be unique, since it drops an event whose id it has seen before.
+	PlatformHooks(http_err, time, random_err) := {
 		http_send! : Request => Try(Response, http_err),
-		now! : () => U128,
+		now! : () => time,
 		random_u64! : () => Try(U64, random_err),
 	}
+
+	## A time as nanoseconds since the Unix epoch, for a platform whose clock
+	## is not basic-cli's `Utc`. On
+	## [basic-webserver](https://github.com/niclas-ahden/basic-webserver):
+	##
+	## ```
+	## now!: || Sentry.epoch_nanos(UnixTime.now!().nanos_since_epoch()),
+	## ```
+	EpochNanos :: I128.{
+
+		## The nanoseconds since the Unix epoch, which is what [init] reads
+		## from the time `now!` returns.
+		to_nanos_since_epoch : EpochNanos -> I128
+		to_nanos_since_epoch = |EpochNanos.(nanos)| nanos
+	}
+
+	## An [EpochNanos] from nanoseconds since the Unix epoch.
+	epoch_nanos : I128 -> EpochNanos
+	epoch_nanos = |nanos| EpochNanos.(nanos)
 
 	## What every event from a client carries. `environment` and `release` are
 	## how Sentry files events, so set them to what the deployment is. An
@@ -313,7 +343,8 @@ Sentry := [].{
 	## A client for the project `dsn` names, with `options`. An empty or blank
 	## `dsn` gives a disabled client, which sends nothing. Fails only on a DSN
 	## that does not parse, see [Dsn.Problem].
-	init : Hooks(http_err, random_err), Str, Options -> Try(Client, [InvalidDsn(Dsn.Problem)])
+	init : PlatformHooks(http_err, time, random_err), Str, Options -> Try(Client, [InvalidDsn(Dsn.Problem)])
+		where [time.to_nanos_since_epoch : time -> I128]
 	init = |hooks, dsn, options| {
 		target =
 			if dsn.trim().is_empty() {
@@ -322,10 +353,15 @@ Sentry := [].{
 				Enabled(Dsn.parse(dsn)?)
 			}
 		hooks_http_send! = hooks.http_send!
+		hooks_now! = hooks.now!
 		hooks_random_u64! = hooks.random_u64!
 		Ok({
 			http_send!: |request| hooks_http_send!(request).map_err(|err| Str.inspect(err)),
-			now!: hooks.now!,
+			now!: || {
+				# A clock set before 1970 counts as the epoch.
+				nanos = hooks_now!().to_nanos_since_epoch()
+				if nanos < 0 0 else nanos.to_u128_wrap()
+			},
 			random_u64!: || hooks_random_u64!().map_err(|_| RandomFailed),
 			target,
 			options,
@@ -528,8 +564,8 @@ header_value = |response, name|
 # --- Tests ---
 
 ## Hooks that never send: the tests below only prepare envelopes.
-hooks : Sentry.Hooks([Unused], [Unused])
-hooks = { http_send!: |_request| Err(Unused), now!: || 0, random_u64!: || Err(Unused) }
+hooks : Sentry.PlatformHooks([Unused], Sentry.EpochNanos, [Unused])
+hooks = { http_send!: |_request| Err(Unused), now!: || Sentry.epoch_nanos(0), random_u64!: || Err(Unused) }
 
 now : U128
 now = 1_735_689_600_000_000_000
