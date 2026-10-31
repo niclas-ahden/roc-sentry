@@ -8,7 +8,7 @@ an error, and secrets are filtered out before anything is sent.
 ```roc
 app [main!] {
     pf: platform "https://github.com/niclas-ahden/basic-cli/releases/download/0.30.0/6XAUy48Jp34GANurMrMf74DtF7NdpkhnqFLHE4gHNzJy.tar.zst",
-    sentry: "https://github.com/niclas-ahden/roc-sentry/releases/download/0.2.0/EuRYAG1PqJCn9coUsXZyjXC2WM1n3xomknAbMnPZFbk9.tar.zst",
+    sentry: "https://github.com/niclas-ahden/roc-sentry/releases/download/0.2.1/VjTcbcXFszJ9pLEiMpAECQygWYipriuxZ4cardm5ZY9.tar.zst",
 }
 
 import pf.Env
