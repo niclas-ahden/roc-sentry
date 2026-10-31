@@ -62,7 +62,7 @@ Sentry := [].{
 	## The version of this package, reported to Sentry as the `sdk` of every
 	## event and in the `X-Sentry-Auth` header. Bumped with each release.
 	version : Str
-	version = "0.2.0"
+	version = "0.2.1"
 
 	## The platform's functions, wired in at [init]. Roc has no parameterized
 	## modules, so they arrive as plain function values, taken as the
