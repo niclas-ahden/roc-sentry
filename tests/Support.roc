@@ -60,7 +60,7 @@ Support := [].{
 	envelope = |request| {
 		body = Str.from_utf8_lossy(Request.body(request))
 		match body.split_on("\n") {
-			[header, item, event, ""] => Ok({ header, item, event })
+			[first, item, event, ""] => Ok({ header: first, item, event })
 			_ => Err(MalformedEnvelope(body))
 		}
 	}
